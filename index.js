@@ -34,6 +34,7 @@ async function run() {
     const database = client.db("PayGuard");
     const usersCollection = database.collection("users");
     const paymentsCollection = database.collection("payments");
+    const documentsCollection = database.collection("documents");
 
     app.post("/create-payment-intent", async (req, res) => {
       try {
@@ -74,33 +75,35 @@ async function run() {
           res.status(500).send({ message: "Failed to fetch payments", error });
         }
       });
-    app.post("/documents", async (req, res) => {
-      const { file } = req.body; // Assuming file is a base64 encoded string
-      const { userId } = req.body;
 
-      try {
-        const { data, error } = await supabaseClient.storage
-          .from("documents")
-          .upload(`user_docs/${userId}/${file.name}`, file);
-
-        if (error) {
-          throw error;
+      app.post("/documents", async (req, res) => {
+        const {  fileUrl, status, user_id, } = req.body;
+      
+        try {
+          const document = {
+            user_id: user_id,
+            file_url: fileUrl,   
+            status: status || "pending", 
+            uploaded_at: new Date(),
+          };
+      
+          const result = await documentsCollection.insertOne(document);
+          res.status(201).send({ message: "Document uploaded successfully", document: result });
+        } catch (error) {
+          console.error("Error uploading document:", error);
+          res.status(500).send({ message: "Failed to upload document", error });
         }
+      });
 
-        const document = {
-          user_id: userId,
-          file_url: data.path,
-          status: "pending",
-          uploaded_at: new Date(),
-        };
-
-        const result = await documentsCollection.insertOne(document);
-        res.status(201).send(result);
-      } catch (error) {
-        console.error("Error uploading document:", error);
-        res.status(500).send({ message: "Failed to upload document", error });
-      }
-    });
+      app.get("/documents", async (req, res) => {
+        try {
+          const documents = await documentsCollection.find().toArray();
+          res.status(200).send(documents);
+        } catch (error) {
+          console.error("Error fetching documents:", error);
+          res.status(500).send({ message: "Failed to fetch documents", error });
+        }
+      });
 
     // PUT: Update payment status
     app.put("/payments/:id", async (req, res) => {
