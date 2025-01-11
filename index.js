@@ -1,11 +1,19 @@
 const express = require("express");
 const cors = require("cors");
+require('dotenv').config();
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const supabase = require("@supabase/supabase-js");
 const app = express();
 const port = process.env.PORT || 3000;
 
 // middlewares
 app.use(cors());
 app.use(express.json());
+
+const supabaseClient = supabase.createClient(
+  "https://fbreoonkhaqatovmaorj.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZicmVvb25raGFxYXRvdm1hb3JqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzY0ODg5MDEsImV4cCI6MjA1MjA2NDkwMX0.XiaLdYmmNNTJnk-vTxNqG6IzwQMLAMmB65Mq3kRVBGs"
+);
 
 const { MongoClient, ServerApiVersion } = require("mongodb");
 const uri =
@@ -25,11 +33,97 @@ async function run() {
 
     const database = client.db("PayGuard");
     const usersCollection = database.collection("users");
+    const paymentsCollection = database.collection("payments");
+
+    app.post("/create-payment-intent", async (req, res) => {
+      try {
+        const { price } = req.body;
+        const amount = price * 100;
+
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount,
+          currency: "usd",
+          payment_method_types: ["card"],
+        });
+
+        res.send({
+          clientSecret: paymentIntent.client_secret,
+        });
+      } catch (error) {
+        // console.error("Error creating PaymentIntent:", error.message);
+        res.status(500).send({ error: "Failed to create PaymentIntent" });
+      }
+    });
+    app.post("/payments", async (req, res) => {
+      try {
+        const payment = req.body;
+        const paymentResult = await paymentsCollection.insertOne(payment);
+        res.send(paymentResult);
+      } catch (error) {
+        res.status(500).send({ error: "Failed to save payment" });
+      }
+    });
+
+    // GET: Retrieve all payments (for admin) or user-specific payments
+    app.get("/payments", async (req, res) => {
+        try {
+          const payments = await paymentsCollection.find().toArray();
+          res.status(200).send(payments);
+        } catch (error) {
+          console.error("Error fetching payments:", error);
+          res.status(500).send({ message: "Failed to fetch payments", error });
+        }
+      });
+    app.post("/documents", async (req, res) => {
+      const { file } = req.body; // Assuming file is a base64 encoded string
+      const { userId } = req.body;
+
+      try {
+        const { data, error } = await supabaseClient.storage
+          .from("documents")
+          .upload(`user_docs/${userId}/${file.name}`, file);
+
+        if (error) {
+          throw error;
+        }
+
+        const document = {
+          user_id: userId,
+          file_url: data.path,
+          status: "pending",
+          uploaded_at: new Date(),
+        };
+
+        const result = await documentsCollection.insertOne(document);
+        res.status(201).send(result);
+      } catch (error) {
+        console.error("Error uploading document:", error);
+        res.status(500).send({ message: "Failed to upload document", error });
+      }
+    });
+
+    // PUT: Update payment status
+    app.put("/payments/:id", async (req, res) => {
+      const { id } = req.params;
+      const { status } = req.body;
+
+      try {
+        const result = await paymentsCollection.updateOne(
+          { _id: new MongoClient.ObjectId(id) },
+          { $set: { status, updated_at: new Date() } }
+        );
+        res.status(200).send(result);
+      } catch (error) {
+        console.error("Error updating payment status:", error);
+        res
+          .status(500)
+          .send({ message: "Failed to update payment status", error });
+      }
+    });
 
     // POST: Add a new user
     app.post("/users", async (req, res) => {
       const user = req.body;
-      console.log("New user:", user);
 
       try {
         const result = await usersCollection.insertOne(user);
