@@ -64,6 +64,21 @@ async function run() {
         res.status(500).send({ error: "Failed to save payment" });
       }
     });
+    app.get("/payments/:userId", async (req, res) => {
+      const { userId } = req.params; // Get userId from query parameters
+      
+      if (!userId) {
+        return res.status(400).send({ message: "User ID is required" });
+      }
+    
+      try {
+        const payments = await paymentsCollection.find({ user_id: userId }).toArray();
+        res.status(200).send(payments);
+      } catch (error) {
+        console.error("Error fetching payments:", error);
+        res.status(500).send({ message: "Failed to fetch payments", error });
+      }
+    });
 
     // GET: Retrieve all payments (for admin) or user-specific payments
     app.get("/payments", async (req, res) => {
@@ -120,6 +135,22 @@ async function run() {
         } catch (error) {
           console.error("Error updating payment status:", error);
           res.status(500).send({ message: "Failed to update payment status", error });
+        }
+      });
+
+      app.get("/documents/:userId", async (req, res) => {
+        const { userId } = req.params; // Get userId from query parameters
+        
+        if (!userId) {
+          return res.status(400).send({ message: "User ID is required" });
+        }
+      
+        try {
+          const documents = await documentsCollection.find({ user_id: userId }).toArray();
+          res.status(200).send(documents);
+        } catch (error) {
+          console.error("Error fetching documents:", error);
+          res.status(500).send({ message: "Failed to fetch documents", error });
         }
       });
 
