@@ -15,7 +15,7 @@ const supabaseClient = supabase.createClient(
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZicmVvb25raGFxYXRvdm1hb3JqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzY0ODg5MDEsImV4cCI6MjA1MjA2NDkwMX0.XiaLdYmmNNTJnk-vTxNqG6IzwQMLAMmB65Mq3kRVBGs"
 );
 
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const uri =
   "mongodb+srv://payguard:2yG5IbhsRRJNfdA7@payguard.yg0uc.mongodb.net/?retryWrites=true&w=majority&appName=PayGuard&tls=true&tlsAllowInvalidCertificates=true";
 const client = new MongoClient(uri, {
@@ -95,6 +95,34 @@ async function run() {
         }
       });
 
+      app.put("/documents/:id", async (req, res) => {
+        const { id } = req.params;
+        const { status } = req.body;
+      
+        if (!status) {
+          return res.status(400).send({ message: "Status is required" });
+        }
+      
+        try {
+          const objectId = ObjectId.createFromHexString(id); // Use 'new' here
+      
+          // Update payment status
+          const result = await documentsCollection.updateOne(
+            { _id: objectId },
+            { $set: { status } }
+          );
+      
+          if (result.modifiedCount === 0) {
+            return res.status(404).send({ message: "status already updated" });
+          }
+      
+          res.status(200).send({ message: "Payment status updated successfully" });
+        } catch (error) {
+          console.error("Error updating payment status:", error);
+          res.status(500).send({ message: "Failed to update payment status", error });
+        }
+      });
+
       app.get("/documents", async (req, res) => {
         try {
           const documents = await documentsCollection.find().toArray();
@@ -109,18 +137,28 @@ async function run() {
     app.put("/payments/:id", async (req, res) => {
       const { id } = req.params;
       const { status } = req.body;
-
+    
+      if (!status) {
+        return res.status(400).send({ message: "Status is required" });
+      }
+    
       try {
+        const objectId = ObjectId.createFromHexString(id); // Use 'new' here
+    
+        // Update payment status
         const result = await paymentsCollection.updateOne(
-          { _id: new MongoClient.ObjectId(id) },
-          { $set: { status, updated_at: new Date() } }
+          { _id: objectId },
+          { $set: { status } }
         );
-        res.status(200).send(result);
+    
+        if (result.modifiedCount === 0) {
+          return res.status(404).send({ message: "status already updated" });
+        }
+    
+        res.status(200).send({ message: "Payment status updated successfully" });
       } catch (error) {
         console.error("Error updating payment status:", error);
-        res
-          .status(500)
-          .send({ message: "Failed to update payment status", error });
+        res.status(500).send({ message: "Failed to update payment status", error });
       }
     });
 
