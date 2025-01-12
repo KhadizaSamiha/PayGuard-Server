@@ -1,8 +1,11 @@
 const express = require("express");
 const cors = require("cors");
-require('dotenv').config();
+require("dotenv").config();
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const supabase = require("@supabase/supabase-js");
+const pdf = require("pdfkit");
+const fs = require("fs");
+const path = require("path");
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -66,13 +69,15 @@ async function run() {
     });
     app.get("/payments/:userId", async (req, res) => {
       const { userId } = req.params; // Get userId from query parameters
-      
+
       if (!userId) {
         return res.status(400).send({ message: "User ID is required" });
       }
-    
+
       try {
-        const payments = await paymentsCollection.find({ user_id: userId }).toArray();
+        const payments = await paymentsCollection
+          .find({ user_id: userId })
+          .toArray();
         res.status(200).send(payments);
       } catch (error) {
         console.error("Error fetching payments:", error);
@@ -82,114 +87,173 @@ async function run() {
 
     // GET: Retrieve all payments (for admin) or user-specific payments
     app.get("/payments", async (req, res) => {
-        try {
-          const payments = await paymentsCollection.find().toArray();
-          res.status(200).send(payments);
-        } catch (error) {
-          console.error("Error fetching payments:", error);
-          res.status(500).send({ message: "Failed to fetch payments", error });
-        }
-      });
+      try {
+        const payments = await paymentsCollection.find().toArray();
+        res.status(200).send(payments);
+      } catch (error) {
+        console.error("Error fetching payments:", error);
+        res.status(500).send({ message: "Failed to fetch payments", error });
+      }
+    });
 
-      app.post("/documents", async (req, res) => {
-        const {  fileUrl, status, user_id, } = req.body;
-      
-        try {
-          const document = {
-            user_id: user_id,
-            file_url: fileUrl,   
-            status: status || "pending", 
-            uploaded_at: new Date(),
-          };
-      
-          const result = await documentsCollection.insertOne(document);
-          res.status(201).send({ message: "Document uploaded successfully", document: result });
-        } catch (error) {
-          console.error("Error uploading document:", error);
-          res.status(500).send({ message: "Failed to upload document", error });
-        }
-      });
+    app.post("/documents", async (req, res) => {
+      const { fileUrl, status, user_id } = req.body;
 
-      app.put("/documents/:id", async (req, res) => {
-        const { id } = req.params;
-        const { status } = req.body;
-      
-        if (!status) {
-          return res.status(400).send({ message: "Status is required" });
-        }
-      
-        try {
-          const objectId = ObjectId.createFromHexString(id); // Use 'new' here
-      
-          // Update payment status
-          const result = await documentsCollection.updateOne(
-            { _id: objectId },
-            { $set: { status } }
-          );
-      
-          if (result.modifiedCount === 0) {
-            return res.status(404).send({ message: "status already updated" });
-          }
-      
-          res.status(200).send({ message: "Payment status updated successfully" });
-        } catch (error) {
-          console.error("Error updating payment status:", error);
-          res.status(500).send({ message: "Failed to update payment status", error });
-        }
-      });
+      try {
+        const document = {
+          user_id: user_id,
+          file_url: fileUrl,
+          status: status || "pending",
+          uploaded_at: new Date(),
+        };
 
-      app.get("/documents/:userId", async (req, res) => {
-        const { userId } = req.params; // Get userId from query parameters
-        
-        if (!userId) {
-          return res.status(400).send({ message: "User ID is required" });
-        }
-      
-        try {
-          const documents = await documentsCollection.find({ user_id: userId }).toArray();
-          res.status(200).send(documents);
-        } catch (error) {
-          console.error("Error fetching documents:", error);
-          res.status(500).send({ message: "Failed to fetch documents", error });
-        }
-      });
+        const result = await documentsCollection.insertOne(document);
+        res.status(201).send({
+          message: "Document uploaded successfully",
+          document: result,
+        });
+      } catch (error) {
+        console.error("Error uploading document:", error);
+        res.status(500).send({ message: "Failed to upload document", error });
+      }
+    });
 
-      app.get("/documents", async (req, res) => {
-        try {
-          const documents = await documentsCollection.find().toArray();
-          res.status(200).send(documents);
-        } catch (error) {
-          console.error("Error fetching documents:", error);
-          res.status(500).send({ message: "Failed to fetch documents", error });
+    app.put("/documents/:id", async (req, res) => {
+      const { id } = req.params;
+      const { status } = req.body;
+
+      if (!status) {
+        return res.status(400).send({ message: "Status is required" });
+      }
+
+      try {
+        const objectId = ObjectId.createFromHexString(id); // Use 'new' here
+
+        // Update payment status
+        const result = await documentsCollection.updateOne(
+          { _id: objectId },
+          { $set: { status } }
+        );
+
+        if (result.modifiedCount === 0) {
+          return res.status(404).send({ message: "status already updated" });
         }
-      });
+
+        res
+          .status(200)
+          .send({ message: "Payment status updated successfully" });
+      } catch (error) {
+        console.error("Error updating payment status:", error);
+        res
+          .status(500)
+          .send({ message: "Failed to update payment status", error });
+      }
+    });
+
+    app.get("/documents/:userId", async (req, res) => {
+      const { userId } = req.params; // Get userId from query parameters
+
+      if (!userId) {
+        return res.status(400).send({ message: "User ID is required" });
+      }
+
+      try {
+        const documents = await documentsCollection
+          .find({ user_id: userId })
+          .toArray();
+        res.status(200).send(documents);
+      } catch (error) {
+        console.error("Error fetching documents:", error);
+        res.status(500).send({ message: "Failed to fetch documents", error });
+      }
+    });
+
+    app.get("/documents", async (req, res) => {
+      try {
+        const documents = await documentsCollection.find().toArray();
+        res.status(200).send(documents);
+      } catch (error) {
+        console.error("Error fetching documents:", error);
+        res.status(500).send({ message: "Failed to fetch documents", error });
+      }
+    });
+
+    app.get("/invoice/:paymentId", async (req, res) => {
+      const { paymentId } = req.params;
+
+      try {
+        // Create ObjectId using the new method
+        const objectId = new ObjectId(paymentId);
+
+        const payment = await paymentsCollection.findOne({ _id: objectId });
+
+        if (!payment || payment.status !== "approved") {
+          return res
+            .status(404)
+            .send({ message: "Invoice not available for this payment" });
+        }
+
+        const invoiceName = `invoice_${paymentId}.pdf`;
+        const invoiceDir = path.join(__dirname, "invoices");
+        const invoicePath = path.join(invoiceDir, invoiceName);
+
+        // Ensure the 'invoices' directory exists
+        if (!fs.existsSync(invoiceDir)) {
+          fs.mkdirSync(invoiceDir, { recursive: true });
+        }
+
+        // Generate the PDF
+        const doc = new pdf();
+        doc.pipe(fs.createWriteStream(invoicePath));
+        doc.pipe(res);
+
+        doc.fontSize(18).text("Invoice", { align: "center" });
+        doc.text("\n");
+        doc.fontSize(12).text(`Invoice ID: ${paymentId}`);
+        doc.text(`User ID: ${payment.user_id}`);
+        doc.text(`Title: ${payment.title}`);
+        doc.text(`Amount: $${payment.amount}`);
+        doc.text(`Date: ${new Date(payment.created_at).toLocaleString()}`);
+        doc.text("\n");
+        doc.text("Thank you for your payment!", { align: "center" });
+
+        doc.end();
+      } catch (error) {
+        console.error("Error generating invoice:", error);
+        res.status(500).send({ message: "Failed to generate invoice" });
+      }
+    });
 
     // PUT: Update payment status
     app.put("/payments/:id", async (req, res) => {
       const { id } = req.params;
       const { status } = req.body;
-    
+
       if (!status) {
         return res.status(400).send({ message: "Status is required" });
       }
-    
+
       try {
         const objectId = ObjectId.createFromHexString(id); // Use 'new' here
-    
+
         // Update payment status
         const result = await paymentsCollection.updateOne(
           { _id: objectId },
           { $set: { status } }
         );
-    
+
         if (result.modifiedCount === 0) {
           return res.status(404).send({ message: "status already updated" });
         }
-    
-        res.status(200).send({ message: "Payment status updated successfully" });
+
+        res
+          .status(200)
+          .send({ message: "Payment status updated successfully" });
       } catch (error) {
         console.error("Error updating payment status:", error);
-        res.status(500).send({ message: "Failed to update payment status", error });
+        res
+          .status(500)
+          .send({ message: "Failed to update payment status", error });
       }
     });
 
@@ -218,8 +282,8 @@ async function run() {
     });
 
     app.get("/users/:email", async (req, res) => {
-      const { email } = req.params; 
-    
+      const { email } = req.params;
+
       try {
         const user = await usersCollection.findOne({ email: email });
         if (user) {
