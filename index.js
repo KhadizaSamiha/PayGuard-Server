@@ -6,6 +6,7 @@ const supabase = require("@supabase/supabase-js");
 const pdf = require("pdfkit");
 const fs = require("fs");
 const path = require("path");
+const nodemailer = require("nodemailer");
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -18,6 +19,7 @@ const supabaseClient = supabase.createClient(
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZicmVvb25raGFxYXRvdm1hb3JqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzY0ODg5MDEsImV4cCI6MjA1MjA2NDkwMX0.XiaLdYmmNNTJnk-vTxNqG6IzwQMLAMmB65Mq3kRVBGs"
 );
 
+// connect to mongodb
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const uri =
   "mongodb+srv://payguard:2yG5IbhsRRJNfdA7@payguard.yg0uc.mongodb.net/?retryWrites=true&w=majority&appName=PayGuard&tls=true&tlsAllowInvalidCertificates=true";
@@ -29,6 +31,7 @@ const client = new MongoClient(uri, {
   },
 });
 
+
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
@@ -38,6 +41,34 @@ async function run() {
     const usersCollection = database.collection("users");
     const paymentsCollection = database.collection("payments");
     const documentsCollection = database.collection("documents");
+
+     // Nodemailer Transporter setup
+     const transporter = nodemailer.createTransport({
+      service: 'gmail', // Use your email service here
+      auth: {
+        user: process.env.EMAIL_USER , // your email
+        pass: process.env.EMAIL_PASS, // your email password or app password
+      },
+    });
+
+    // Function to send email when payment status changes
+    function sendStatusEmail(userEmail, status) {
+      const mailOptions = {
+        from: process.env.EMAIL_USER ,
+        to: userEmail,
+        subject: "Payment Status Update",
+        text: `Dear Customer,\n\nYour payment status has been updated to: ${status}.\n\nThank you for using our service.`,
+      };
+
+      transporter.sendMail(mailOptions, (error, info) => {
+        if (error) {
+          console.log("Error sending email:", error);
+        } else {
+          console.log("Email sent: " + info.response);
+        }
+      });
+    };
+    
 
     app.post("/create-payment-intent", async (req, res) => {
       try {
@@ -234,7 +265,13 @@ async function run() {
       }
 
       try {
-        const objectId = ObjectId.createFromHexString(id); // Use 'new' here
+        const objectId = new ObjectId(id); // Create objectId from the ID string
+
+        // Find the payment to get the user's email
+        const payment = await paymentsCollection.findOne({ _id: objectId });
+        if (!payment) {
+          return res.status(404).send({ message: "Payment not found" });
+        }
 
         // Update payment status
         const result = await paymentsCollection.updateOne(
@@ -243,17 +280,16 @@ async function run() {
         );
 
         if (result.modifiedCount === 0) {
-          return res.status(404).send({ message: "status already updated" });
+          return res.status(404).send({ message: "Status already updated" });
         }
 
-        res
-          .status(200)
-          .send({ message: "Payment status updated successfully" });
+        // Send email to the user
+        sendStatusEmail(payment.email, status);
+
+        res.status(200).send({ message: "Payment status updated successfully" });
       } catch (error) {
         console.error("Error updating payment status:", error);
-        res
-          .status(500)
-          .send({ message: "Failed to update payment status", error });
+        res.status(500).send({ message: "Failed to update payment status", error });
       }
     });
 
