@@ -22,7 +22,7 @@ const supabaseClient = supabase.createClient(
 // connect to mongodb
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const uri =
-  "mongodb+srv://payguard:2yG5IbhsRRJNfdA7@payguard.yg0uc.mongodb.net/?retryWrites=true&w=majority&appName=PayGuard&tls=true&tlsAllowInvalidCertificates=true";
+  `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@payguard.yg0uc.mongodb.net/?retryWrites=true&w=majority&appName=PayGuard&tls=true&tlsAllowInvalidCertificates=true`;
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
