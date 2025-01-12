@@ -31,10 +31,8 @@ const client = new MongoClient(uri, {
   },
 });
 
-
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
 
     const database = client.db("PayGuard");
@@ -42,19 +40,19 @@ async function run() {
     const paymentsCollection = database.collection("payments");
     const documentsCollection = database.collection("documents");
 
-     // Nodemailer Transporter setup
-     const transporter = nodemailer.createTransport({
-      service: 'gmail', // Use your email service here
+    // Nodemailer Transporter setup
+    const transporter = nodemailer.createTransport({
+      service: "gmail", 
       auth: {
-        user: process.env.EMAIL_USER , // your email
-        pass: process.env.EMAIL_PASS, // your email password or app password
+        user: process.env.EMAIL_USER, 
+        pass: process.env.EMAIL_PASS,
       },
     });
 
     // Function to send email when payment status changes
     function sendStatusEmail(userEmail, status) {
       const mailOptions = {
-        from: process.env.EMAIL_USER ,
+        from: process.env.EMAIL_USER,
         to: userEmail,
         subject: "Payment Status Update",
         text: `Dear Customer,\n\nYour payment status has been updated to: ${status}.\n\nThank you for using our service.`,
@@ -67,9 +65,9 @@ async function run() {
           console.log("Email sent: " + info.response);
         }
       });
-    };
-    
+    }
 
+    // create payment intent
     app.post("/create-payment-intent", async (req, res) => {
       try {
         const { price } = req.body;
@@ -85,10 +83,11 @@ async function run() {
           clientSecret: paymentIntent.client_secret,
         });
       } catch (error) {
-        // console.error("Error creating PaymentIntent:", error.message);
         res.status(500).send({ error: "Failed to create PaymentIntent" });
       }
     });
+
+    // post payments
     app.post("/payments", async (req, res) => {
       try {
         const payment = req.body;
@@ -99,7 +98,7 @@ async function run() {
       }
     });
     app.get("/payments/:userId", async (req, res) => {
-      const { userId } = req.params; // Get userId from query parameters
+      const { userId } = req.params; 
 
       if (!userId) {
         return res.status(400).send({ message: "User ID is required" });
@@ -116,7 +115,7 @@ async function run() {
       }
     });
 
-    // GET: Retrieve all payments (for admin) or user-specific payments
+    // Retrieve all payments 
     app.get("/payments", async (req, res) => {
       try {
         const payments = await paymentsCollection.find().toArray();
@@ -127,6 +126,7 @@ async function run() {
       }
     });
 
+    // post documents
     app.post("/documents", async (req, res) => {
       const { fileUrl, status, user_id } = req.body;
 
@@ -149,6 +149,7 @@ async function run() {
       }
     });
 
+    // update documents status
     app.put("/documents/:id", async (req, res) => {
       const { id } = req.params;
       const { status } = req.body;
@@ -158,7 +159,7 @@ async function run() {
       }
 
       try {
-        const objectId = ObjectId.createFromHexString(id); // Use 'new' here
+        const objectId = ObjectId.createFromHexString(id);
 
         // Update payment status
         const result = await documentsCollection.updateOne(
@@ -181,6 +182,7 @@ async function run() {
       }
     });
 
+    // get documents by id
     app.get("/documents/:userId", async (req, res) => {
       const { userId } = req.params; // Get userId from query parameters
 
@@ -199,6 +201,7 @@ async function run() {
       }
     });
 
+    // get all documents
     app.get("/documents", async (req, res) => {
       try {
         const documents = await documentsCollection.find().toArray();
@@ -209,11 +212,11 @@ async function run() {
       }
     });
 
+    // invoice for payment
     app.get("/invoice/:paymentId", async (req, res) => {
       const { paymentId } = req.params;
 
       try {
-        // Create ObjectId using the new method
         const objectId = new ObjectId(paymentId);
 
         const payment = await paymentsCollection.findOne({ _id: objectId });
@@ -255,7 +258,7 @@ async function run() {
       }
     });
 
-    // PUT: Update payment status
+    // Update payment status
     app.put("/payments/:id", async (req, res) => {
       const { id } = req.params;
       const { status } = req.body;
@@ -286,14 +289,18 @@ async function run() {
         // Send email to the user
         sendStatusEmail(payment.email, status);
 
-        res.status(200).send({ message: "Payment status updated successfully" });
+        res
+          .status(200)
+          .send({ message: "Payment status updated successfully" });
       } catch (error) {
         console.error("Error updating payment status:", error);
-        res.status(500).send({ message: "Failed to update payment status", error });
+        res
+          .status(500)
+          .send({ message: "Failed to update payment status", error });
       }
     });
 
-    // POST: Add a new user
+    // Add a new user
     app.post("/users", async (req, res) => {
       const user = req.body;
 
@@ -306,7 +313,7 @@ async function run() {
       }
     });
 
-    // GET: Retrieve all users
+    // Retrieve all users
     app.get("/users", async (req, res) => {
       try {
         const users = await usersCollection.find().toArray();
@@ -317,6 +324,7 @@ async function run() {
       }
     });
 
+    // get user by email
     app.get("/users/:email", async (req, res) => {
       const { email } = req.params;
 
